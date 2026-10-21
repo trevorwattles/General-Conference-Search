@@ -762,3 +762,7 @@ input:focus {
         flex-direction: column;
     }
 }
+/* Keep paragraph breaks in AI answers (rendered as escaped plain text) */
+.rag-answer .result-sentences {
+    white-space: pre-wrap;
+}

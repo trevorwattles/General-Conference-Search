@@ -81,12 +81,33 @@ def test_embed_question(token):
           f"        → Access-Control-Allow-Origin: {allowed}")
 
 
+def test_generate_answer(token):
+    fn = 'generate-answer'
+    talk = {'title': 'Test Talk on Prayer', 'speaker': 'Elder Tester',
+            'text': 'Prayer is how we speak with our Heavenly Father. Pray morning and night, '
+                    'and listen for answers that come as peace.'}
+    snippet = lambda r: f"\n          \"{r.json()['answer'][:160]}…\""
+    print(f'\n🤖 {fn}')
+    check('no token → 401', 401, post(fn, {'question': 'prayer', 'context_talks': [talk]}))
+    check('empty context_talks → 400 (readiness probe, no GPT call)', 400,
+          post(fn, {'question': 'test', 'context_talks': []}, token))
+    check('6 talks (> 5) → 400', 400, post(fn, {'question': 'prayer', 'context_talks': [talk] * 6}, token))
+    check('context over 60k chars → 400', 400, post(fn, {'question': 'prayer', 'context_talks': [
+        {**talk, 'text': 'x' * 31_000}, {**talk, 'text': 'x' * 31_000}]}, token))
+    check('talk missing text → 400', 400, post(fn, {'question': 'prayer', 'context_talks': [{'title': 'x'}]}, token))
+    check('grounded question → 200, cites the talk', 200,
+          post(fn, {'question': 'What does the talk teach about prayer?', 'context_talks': [talk]}, token), snippet)
+    check('off-topic question → 200, should decline (read it!)', 200,
+          post(fn, {'question': 'What is the capital of France?', 'context_talks': [talk]}, token), snippet)
+
+
 def main():
     print('=' * 60)
     print('Edge Function Security Test')
     print('=' * 60)
     token = user_token()
     test_embed_question(token)
+    test_generate_answer(token)
 
     passed = sum(results)
     print('\n' + '=' * 60)

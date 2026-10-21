@@ -418,3 +418,6 @@ enabled = true
 # The gateway check can't verify this project's ES256 user session JWTs.
 [functions.embed-question]
 verify_jwt = false
+
+[functions.generate-answer]
+verify_jwt = false
