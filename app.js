@@ -319,22 +319,27 @@ async function checkSearchReadiness() {
     readinessCheckRunning = true;
 
     try {
-        // --- Check 1: Any data at all? (keyword search just needs text) ---
-        const { count: totalCount, error: totalError } = await supabaseClient
-            .from('sentence_embeddings')
-            .select('*', { count: 'exact', head: true });
+        // These run on every page load, so ask "is there at least one row?"
+        // (limit 1) rather than count: 'exact', which counts every row.
 
-        const hasData = !totalError && totalCount > 0;
+        // --- Check 1: Any data at all? (keyword search just needs text) ---
+        const { data: anyRow, error: totalError } = await supabaseClient
+            .from('sentence_embeddings')
+            .select('id')
+            .limit(1);
+
+        const hasData = !totalError && anyRow.length > 0;
         setSearchReady('keyword', hasData);
 
         // --- Check 2: Data with embeddings? (semantic search needs vectors) ---
         let hasEmbeddings = false;
         if (hasData) {
-            const { count, error } = await supabaseClient
+            const { data, error } = await supabaseClient
                 .from('sentence_embeddings')
-                .select('*', { count: 'exact', head: true })
-                .not('embedding', 'is', null);
-            hasEmbeddings = !error && count > 0;
+                .select('id')
+                .not('embedding', 'is', null)
+                .limit(1);
+            hasEmbeddings = !error && data.length > 0;
         }
 
         // --- 1 embed-question call (only if DB has embeddings) ---
