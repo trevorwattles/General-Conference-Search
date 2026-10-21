@@ -778,28 +778,26 @@ function fetchDeployTimestamp() {
 // ============================================
 // PAGE VIEW COUNTER
 // ============================================
-// Demonstrates public RLS policies: this works without authentication
-// because page_views has anon INSERT + SELECT policies.
+// Works without authentication: anon can INSERT page_url + user_agent,
+// but can't read rows. The total comes from the page_view_count() function,
+// which exposes only the count (see supabase/migrations/0002_hardening.sql).
 
 function recordPageView() {
     if (!supabaseClient) return;
 
     const pageViewsEl = document.getElementById('page-views-count');
 
-    // Insert a page view (best-effort, no auth required)
+    // Insert a page view (best-effort, no auth required).
+    // origin + pathname only: after a magic-link redirect the full href carries
+    // #access_token=... / ?code=..., which must never be stored.
     supabaseClient
         .from('page_views')
         .insert({
-            page_url: window.location.href,
-            user_agent: navigator.userAgent
+            page_url: (window.location.origin + window.location.pathname).slice(0, 499),
+            user_agent: navigator.userAgent.slice(0, 499)
         })
-        .then(() => {
-            // Query the total count
-            return supabaseClient
-                .from('page_views')
-                .select('*', { count: 'exact', head: true });
-        })
-        .then(({ count }) => {
+        .then(() => supabaseClient.rpc('page_view_count'))
+        .then(({ data: count }) => {
             if (pageViewsEl && count != null) {
                 pageViewsEl.textContent = count.toLocaleString();
             }
