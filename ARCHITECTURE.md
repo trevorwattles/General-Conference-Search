@@ -51,7 +51,7 @@ Two layers in Postgres, on purpose: **GRANTs** decide which operations a role ma
 | Keyword `ILIKE '%xylophone%'` (no match) | 91 ms, read all 26,256 rows | 0.35 ms | trigram GIN (`0003`) |
 | Keyword `ILIKE '%Kirtland%'` (rare) | 49 ms | 0.8 ms | trigram GIN |
 | Keyword `ILIKE '%faith%'` (common) | 1.4 ms (lucky early stop) | 3.8 ms | trigram GIN: slower here, but no query scans the whole table anymore |
-| Semantic top-20 | **17–23 s** exact scan: over the 8 s `authenticated` statement timeout, so it would have *failed* | **3–8 ms** warm, ~0.3–1 s cold; 100% recall vs exact on samples | HNSW cosine (`0004`) |
+| Semantic top-20 | **17–23 s** exact scan: over the 8 s `authenticated` statement timeout, so it would have *failed* | **3–8 ms** warm, ~0.3–1.3 s cold; 90–100% recall vs exact on samples | HNSW cosine (`0004`) |
 | Readiness check on every page load | 2,967 ms `count: 'exact'` | 2.4 ms `limit(1)` | (query change) |
 
 Notes:

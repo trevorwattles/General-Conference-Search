@@ -1,0 +1,27 @@
+
+🔍 ILIKE '%faith%'  →  1.72 ms
+     Limit (rows=20, removed_by_filter=0)
+       Bitmap Heap Scan (rows=20, removed_by_filter=0)
+         Bitmap Index Scan using sentence_embeddings_text_trgm_idx (rows=1565, removed_by_filter=0)
+
+🔍 ILIKE '%Kirtland%'  →  0.79 ms
+     Limit (rows=20, removed_by_filter=0)
+       Bitmap Heap Scan (rows=20, removed_by_filter=0)
+         Bitmap Index Scan using sentence_embeddings_text_trgm_idx (rows=47, removed_by_filter=0)
+
+🔍 ILIKE '%xylophone%'  →  0.33 ms
+     Limit (rows=0, removed_by_filter=0)
+       Bitmap Heap Scan (rows=0, removed_by_filter=0)
+         Bitmap Index Scan using sentence_embeddings_text_trgm_idx (rows=0, removed_by_filter=0)
+
+🧠 nearest 20 to a sentence about 'peace'  →  3.47 ms warm (694 ms cold)  (recall vs exact: 100%)
+     Limit (rows=20, removed_by_filter=0)
+       Index Scan using sentence_embeddings_embedding_hnsw_idx (rows=20, removed_by_filter=0)
+
+🧠 nearest 20 to a sentence about 'prayer'  →  4.42 ms warm (1260 ms cold)  (recall vs exact: 90%)
+     Limit (rows=20, removed_by_filter=0)
+       Index Scan using sentence_embeddings_embedding_hnsw_idx (rows=20, removed_by_filter=0)
+
+🧠 nearest 20 to a sentence about 'temple'  →  5.00 ms warm (800 ms cold)  (recall vs exact: 100%)
+     Limit (rows=20, removed_by_filter=0)
+       Index Scan using sentence_embeddings_embedding_hnsw_idx (rows=20, removed_by_filter=0)

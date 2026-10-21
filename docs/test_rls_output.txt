@@ -1,0 +1,73 @@
+============================================================
+RLS Proof Test (all checks use the public anon key)
+============================================================
+
+👤 Anonymous visitor (anon key, no login)
+  ✅  can insert a page view
+        → ok (inserted)
+  ✅  can call page_view_count()
+        → ok (21)
+  🔒  cannot read page_views rows (visitor user agents)
+        → denied: 42501 permission denied for table page_views
+  🔒  cannot forge visited_at on a page view
+        → denied: 42501 permission denied for table page_views
+  🔒  cannot insert an oversized page_url (CHECK constraint)
+        → denied: 23514 new row for relation "page_views" violates check constraint "page_views_page
+  🔒  cannot read sentence_embeddings
+        → denied: 42501 permission denied for table sentence_embeddings
+  🔒  cannot call match_sentences()
+        → denied: 42501 permission denied for function match_sentences
+  🔒  cannot insert into sentence_embeddings
+        → denied: 42501 permission denied for table sentence_embeddings
+
+🔑 Logged-in user (rls-test-a@example.com, anon key + user JWT)
+  ✅  can read sentence_embeddings
+        → ok (5 rows)
+  ✅  can call match_sentences()
+        → ok (5 rows)
+  ✅  match_sentences() caps match_count at 50
+        → ok (50)
+  🔒  cannot insert into sentence_embeddings
+        → denied: 42501 permission denied for table sentence_embeddings
+  🔒  cannot delete from sentence_embeddings
+        → denied: 42501 permission denied for table sentence_embeddings
+  🔒  cannot read page_views rows
+        → denied: 42501 permission denied for table page_views
+
+📜 question_history: rls-test-a@example.com (A) vs rls-test-b@example.com (B)
+  ✅  A can read A's own row
+        → ok (1 rows)
+  🔒  B cannot read A's row (even by exact id)
+        → 0 rows returned
+  🔒  B listing all history sees none of A's rows
+        → 0 rows returned
+  🔒  B cannot delete A's row (0 rows affected)
+        → 0 rows returned
+  ✅  …and A's row still exists afterwards
+        → ok (1 rows)
+  🔒  B cannot update A's row (no UPDATE grant/policy)
+        → denied: 42501 permission denied for table question_history
+  🔒  A cannot insert a row owned by B (user_id not insertable)
+        → denied: 42501 permission denied for table question_history
+  🔒  A cannot backdate created_at
+        → denied: 42501 permission denied for table question_history
+  🔒  anonymous visitor cannot read any history
+        → denied: 42501 permission denied for table question_history
+  ✅  A can delete own row
+        → ok (1 rows)
+
+🗄️  Server-only tables (Edge Functions via service_role only)
+  🔒  user cannot read question_embeddings_cache
+        → denied: 42501 permission denied for table question_embeddings_cache
+  🔒  user cannot poison question_embeddings_cache
+        → denied: 42501 permission denied for table question_embeddings_cache
+  🔒  user cannot read api_usage (rate-limit log)
+        → denied: 42501 permission denied for table api_usage
+  🔒  user cannot delete api_usage rows to reset their limit
+        → denied: 42501 permission denied for table api_usage
+  🔒  user cannot call consume_rate_limit() (would burn others' quota)
+        → denied: 42501 permission denied for function consume_rate_limit
+
+============================================================
+29/29 checks passed
+============================================================

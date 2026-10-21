@@ -1,0 +1,53 @@
+============================================================
+Edge Function Security Test
+============================================================
+
+🧠 embed-question
+  ✅  no token → 401
+        → HTTP 401 {"error":"Missing Authorization header"}
+  ✅  anon key as token (no user) → 401
+        → HTTP 401 {"error":"Not signed in"}
+  ✅  signed-in user → 200 with 1536-dim embedding
+        → HTTP 200 (dims=1536)
+  ✅  empty question → 400
+        → HTTP 400 {"error":"question must be a string of 1-1000 characters"}
+  ✅  question > 1000 chars → 400
+        → HTTP 400 {"error":"question must be a string of 1-1000 characters"}
+  ✅  non-string question → 400
+        → HTTP 400 {"error":"question must be a string of 1-1000 characters"}
+  ✅  CORS preflight from evil.example.com is not allowed
+        → Access-Control-Allow-Origin: https://trevorwattles.github.io
+
+🤖 generate-answer
+  ✅  no token → 401
+        → HTTP 401 {"error":"Missing Authorization header"}
+  ✅  empty context_talks → 400 (readiness probe, no GPT call)
+        → HTTP 400 {"error":"context_talks must be a non-empty array"}
+  ✅  6 talks (> 5) → 400
+        → HTTP 400 {"error":"context_talks may have at most 5 talks"}
+  ✅  context over 60k chars → 400
+        → HTTP 400 {"error":"context_talks total must be under 60000 characters"}
+  ✅  talk missing text → 400
+        → HTTP 400 {"error":"each talk needs string title and text"}
+  ✅  grounded question → 200, cites the talk
+        → HTTP 200 
+          "The talk teaches that prayer is a way to communicate with our Heavenly Father. It advises praying both in the morning and at night and emphasizes listening for …"
+  ✅  off-topic question → 200, should decline (read it!)
+        → HTTP 200 
+          "The excerpts provided do not contain information about the capital of France.…"
+
+🚀 Custom feature: cache, history, rate limit
+  ✅  new question → cache miss (calls OpenAI)
+        → HTTP 200 (cached=False)
+  ✅  same question, different case/spacing → cache hit ($0)
+        → HTTP 200 (cached=True)
+  ✅  generate-answer saves history and returns history_id
+        → HTTP 200 (history_id=True)
+  ✅  history row owned by caller; javascript: URL stripped
+        → owner matches=True, stored url=''
+  ✅  31st answer this hour → 429 (no OpenAI call)
+        → HTTP 429 Limit of 30 answers per hour reached. Try again later.
+
+============================================================
+19/19 checks passed
+============================================================
