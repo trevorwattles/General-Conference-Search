@@ -818,13 +818,16 @@ input:focus {
 
 .history-delete {
     background: transparent;
+    color: var(--text-muted);
     border: 1px solid var(--surface-light);
     border-radius: var(--radius-md);
     padding: 0 var(--spacing-sm);
+    font-size: 1rem;
     cursor: pointer;
 }
 
 .history-delete:hover {
+    color: var(--error);
     border-color: var(--error);
 }
 

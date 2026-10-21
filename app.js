@@ -756,7 +756,7 @@ async function loadHistory() {
                 <span class="history-question">${escapeHtml(row.question)}</span>
                 <span class="history-date">${escapeHtml(new Date(row.created_at).toLocaleString())}</span>
             </button>
-            <button class="history-delete" title="Delete">🗑️</button>
+            <button class="history-delete" title="Delete" aria-label="Delete">✕</button>
         </li>`).join('');
 }
 
