@@ -101,6 +101,42 @@ def test_generate_answer(token):
           post(fn, {'question': 'What is the capital of France?', 'context_talks': [talk]}, token), snippet)
 
 
+def test_feature(token):
+    print('\n🚀 Custom feature: cache, history, rate limit')
+    admin = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+    user_id = next(u.id for u in admin.auth.admin.list_users() if u.email == TEST_EMAIL)
+
+    question = f'cache test {pysecrets.token_hex(4)}'
+    check('new question → cache miss (calls OpenAI)', 200, post('embed-question', {'question': question}, token),
+          lambda r: f"(cached={r.json()['cached']})")
+    resp = post('embed-question', {'question': f'  {question.upper()}  '}, token)
+    hit = resp.status_code == 200 and resp.json().get('cached') is True
+    results.append(hit)
+    print(f"  {'✅' if hit else '❌ FAIL'}  same question, different case/spacing → cache hit ($0)\n"
+          f"        → HTTP {resp.status_code} (cached={resp.json().get('cached') if resp.ok else None})")
+
+    talk = {'title': 'Test Talk on Prayer', 'speaker': 'Elder Tester', 'url': 'javascript:alert(1)',
+            'text': 'Prayer is how we speak with our Heavenly Father.'}
+    resp = post('generate-answer', {'question': 'What does the talk teach about prayer?', 'context_talks': [talk]}, token)
+    history_id = resp.json().get('history_id') if resp.status_code == 200 else None
+    check('generate-answer saves history and returns history_id', 200, resp, lambda r: f"(history_id={history_id is not None})")
+    if history_id:
+        row = admin.table('question_history').select('user_id, sources').eq('id', history_id).single().execute().data
+        owned = row['user_id'] == user_id
+        safe_url = row['sources'][0]['url'] == ''
+        results.append(owned and safe_url)
+        print(f"  {'✅' if owned and safe_url else '❌ FAIL'}  history row owned by caller; javascript: URL stripped\n"
+              f"        → owner matches={owned}, stored url={row['sources'][0]['url']!r}")
+        admin.table('question_history').delete().eq('id', history_id).execute()
+
+    # Fill this hour's quota directly (service role) instead of making 30 real GPT-4o calls.
+    admin.table('api_usage').delete().eq('user_id', user_id).execute()
+    admin.table('api_usage').insert([{'user_id': user_id, 'fn': 'generate-answer'}] * 30).execute()
+    check('31st answer this hour → 429 (no OpenAI call)', 429,
+          post('generate-answer', {'question': 'prayer?', 'context_talks': [talk]}, token), lambda r: r.json()['error'])
+    admin.table('api_usage').delete().eq('user_id', user_id).execute()
+
+
 def main():
     print('=' * 60)
     print('Edge Function Security Test')
@@ -108,6 +144,7 @@ def main():
     token = user_token()
     test_embed_question(token)
     test_generate_answer(token)
+    test_feature(token)
 
     passed = sum(results)
     print('\n' + '=' * 60)

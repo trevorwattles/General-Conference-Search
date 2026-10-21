@@ -766,3 +766,69 @@ input:focus {
 .rag-answer .result-sentences {
     white-space: pre-wrap;
 }
+
+/* ============================================
+   My Question History
+   ============================================ */
+.history-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    max-height: 360px;
+    overflow-y: auto;
+}
+
+.history-item {
+    display: flex;
+    align-items: stretch;
+    gap: var(--spacing-xs);
+    margin-bottom: var(--spacing-xs);
+}
+
+.history-open {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    text-align: left;
+    background: var(--background);
+    color: var(--text);
+    border: 1px solid var(--surface-light);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    cursor: pointer;
+    font: inherit;
+}
+
+.history-open:hover {
+    border-color: var(--primary);
+}
+
+.history-question {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.history-date {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.history-delete {
+    background: transparent;
+    border: 1px solid var(--surface-light);
+    border-radius: var(--radius-md);
+    padding: 0 var(--spacing-sm);
+    cursor: pointer;
+}
+
+.history-delete:hover {
+    border-color: var(--error);
+}
+
+.history-empty {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}

@@ -132,6 +132,17 @@
                     </div>
                     <div class="search-results" id="rag-results"></div>
                 </div>
+
+                <!-- Panel 4: My Question History (per-user RLS) -->
+                <div class="search-panel" id="history-panel">
+                    <div class="panel-header">
+                        <h3>📜 My Question History</h3>
+                        <span class="status-badge" id="history-count"></span>
+                    </div>
+                    <p class="panel-description">Your past questions, visible only to you (enforced by Row Level
+                        Security). Click one to see its answer again.</p>
+                    <ul class="history-list" id="history-list"></ul>
+                </div>
             </div>
         </div>
     </div>

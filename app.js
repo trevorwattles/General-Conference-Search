@@ -286,6 +286,7 @@ function showApp(user) {
     if (userEmailSpan) userEmailSpan.textContent = user.email;
     // Check search readiness when user logs in
     checkSearchReadiness();
+    loadHistory();
 }
 
 function showMessage(text, type) {
@@ -539,38 +540,14 @@ async function askQuestion() {
         // Step 4: Fetch full talk text for richer context
         const enrichedTalks = await fetchFullTalkText(topTalks);
 
-        // Step 5: Generate answer with full context
+        // Step 5: Generate answer with full context (the function also saves it to history)
         const answer = await generateAnswer(question, enrichedTalks);
 
-        // Compute overall similarity (weighted avg across source talks)
-        const overallSimilarity = topTalks.reduce((sum, t) => sum + t.avgSimilarity, 0) / topTalks.length;
-        const overallBadge = similarityBadge(overallSimilarity);
-        const simClass = overallSimilarity >= 0.70 ? 'similarity-high'
-            : overallSimilarity >= 0.40 ? 'similarity-mid' : 'similarity-low';
-
-        let html = `<div class="result-card rag-answer rag-${simClass}">
-            <div class="result-card-header">
-                <div class="result-title">AI Answer</div>
-                ${overallBadge}
-            </div>
-            <div class="result-sentences">${escapeHtml(answer)}</div>
-        </div>`;
-
-        // Show source talks with per-talk similarity badges and links
-        html += '<div class="result-sources"><strong>Sources:</strong></div>';
-        for (const talk of topTalks) {
-            const talkBadge = similarityBadge(talk.avgSimilarity);
-            html += `<div class="result-card result-source">
-                <div class="result-card-header">
-                    <div>
-                        <div class="result-title"><a href="${escapeHtml(talk.url)}" target="_blank" class="result-title-link">${escapeHtml(talk.title)}</a></div>
-                        <div class="result-speaker">by ${escapeHtml(talk.speaker)}</div>
-                    </div>
-                    ${talkBadge}
-                </div>
-            </div>`;
-        }
-        showResults('rag', html);
+        const sources = topTalks.map(t => ({
+            title: t.title, speaker: t.speaker, url: t.url, similarity: t.avgSimilarity
+        }));
+        renderRagAnswer(answer, sources);
+        loadHistory();
 
     } catch (error) {
         showResults('rag', `<div class="result-error">Error: ${escapeHtml(error.message)}</div>`);
@@ -579,9 +556,58 @@ async function askQuestion() {
     }
 }
 
+// Render an answer + source cards (used for new answers and history replays).
+// sources: [{ title, speaker, url, similarity }]
+function renderRagAnswer(answer, sources) {
+    const scored = sources.filter(s => typeof s.similarity === 'number');
+    const overallSimilarity = scored.length
+        ? scored.reduce((sum, s) => sum + s.similarity, 0) / scored.length
+        : null;
+    const simClass = overallSimilarity == null ? ''
+        : overallSimilarity >= 0.70 ? 'rag-similarity-high'
+        : overallSimilarity >= 0.40 ? 'rag-similarity-mid' : 'rag-similarity-low';
+
+    let html = `<div class="result-card rag-answer ${simClass}">
+        <div class="result-card-header">
+            <div class="result-title">AI Answer</div>
+            ${overallSimilarity == null ? '' : similarityBadge(overallSimilarity)}
+        </div>
+        <div class="result-sentences">${escapeHtml(answer)}</div>
+    </div>`;
+
+    // Show source talks with per-talk similarity badges and links
+    html += '<div class="result-sources"><strong>Sources:</strong></div>';
+    for (const talk of sources) {
+        const title = talk.url
+            ? `<a href="${escapeHtml(talk.url)}" target="_blank" class="result-title-link">${escapeHtml(talk.title)}</a>`
+            : escapeHtml(talk.title);
+        html += `<div class="result-card result-source">
+            <div class="result-card-header">
+                <div>
+                    <div class="result-title">${title}</div>
+                    <div class="result-speaker">by ${escapeHtml(talk.speaker)}</div>
+                </div>
+                ${typeof talk.similarity === 'number' ? similarityBadge(talk.similarity) : ''}
+            </div>
+        </div>`;
+    }
+    showResults('rag', html);
+}
+
 // ============================================
 // SHARED SEARCH UTILITIES
 // ============================================
+
+// functions.invoke returns a generic error for non-2xx; read the function's own message.
+async function functionErrorMessage(error, fallback) {
+    try {
+        const body = await error.context.json();
+        if (body?.error) return body.error;
+    } catch {
+        // not a JSON response
+    }
+    return fallback;
+}
 
 // Get embedding via Edge Function
 async function getEmbedding(text) {
@@ -590,7 +616,7 @@ async function getEmbedding(text) {
     });
 
     if (error) {
-        throw new Error(data?.error || 'Failed to get embedding');
+        throw new Error(await functionErrorMessage(error, 'Failed to get embedding'));
     }
 
     return data.embedding;
@@ -690,11 +716,74 @@ async function generateAnswer(question, contextTalks) {
     });
 
     if (error) {
-        throw new Error(data?.error || 'Failed to generate answer');
+        throw new Error(await functionErrorMessage(error, 'Failed to generate answer'));
     }
 
     return data.answer;
 }
+
+// ============================================
+// MY QUESTION HISTORY
+// ============================================
+// No .eq('user_id', ...) anywhere: RLS adds "user_id = auth.uid()" to every
+// query, so these calls can only ever see or delete the signed-in user's rows.
+
+const historyList = document.getElementById('history-list');
+const historyCount = document.getElementById('history-count');
+
+async function loadHistory() {
+    if (!supabaseClient || !historyList) return;
+
+    const { data, error } = await supabaseClient
+        .from('question_history')
+        .select('id, question, created_at')
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+    if (error) {
+        historyList.innerHTML = '<li class="history-empty">History unavailable.</li>';
+        return;
+    }
+    if (historyCount) historyCount.textContent = data.length ? `${data.length}` : '';
+    if (!data.length) {
+        historyList.innerHTML = '<li class="history-empty">Questions you ask above will show up here.</li>';
+        return;
+    }
+
+    historyList.innerHTML = data.map(row => `
+        <li class="history-item" data-id="${escapeHtml(row.id)}">
+            <button class="history-open" title="Show this answer">
+                <span class="history-question">${escapeHtml(row.question)}</span>
+                <span class="history-date">${escapeHtml(new Date(row.created_at).toLocaleString())}</span>
+            </button>
+            <button class="history-delete" title="Delete">🗑️</button>
+        </li>`).join('');
+}
+
+async function showHistoryItem(id) {
+    const { data, error } = await supabaseClient
+        .from('question_history')
+        .select('question, answer, sources')
+        .eq('id', id)
+        .single();
+    if (error) return;
+
+    if (ragInput) ragInput.value = data.question;
+    renderRagAnswer(data.answer, data.sources || []);
+    document.getElementById('rag-panel')?.scrollIntoView({ behavior: 'smooth' });
+}
+
+async function deleteHistoryItem(id) {
+    const { error } = await supabaseClient.from('question_history').delete().eq('id', id);
+    if (!error) loadHistory();
+}
+
+if (historyList) historyList.addEventListener('click', (e) => {
+    const item = e.target.closest('.history-item');
+    if (!item) return;
+    if (e.target.closest('.history-delete')) deleteHistoryItem(item.dataset.id);
+    else if (e.target.closest('.history-open')) showHistoryItem(item.dataset.id);
+});
 
 // ============================================
 // RESULTS DISPLAY HELPERS

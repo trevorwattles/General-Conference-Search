@@ -128,6 +128,58 @@ def main():
     check('cannot read page_views rows', 'blocked',
           lambda: user_a.table('page_views').select('*').limit(5).execute())
 
+    # ---------- Per-user history: user A vs user B ----------
+    email_b = TEST_USERS[1]
+    user_b = signed_in_client(email_b, creds[email_b])
+    user_b_id = user_b.auth.get_user().user.id
+    row = user_a.table('question_history').insert(
+        {'question': 'RLS test question', 'answer': 'secret answer for A only', 'sources': []}).execute().data[0]
+    a_row_id = row['id']
+
+    def expect_rows(result):
+        if not result.data:
+            raise AssertionError('expected rows, got none')
+        return result
+
+    print(f'\n📜 question_history: {email_a} (A) vs {email_b} (B)')
+    check("A can read A's own row", 'allowed',
+          lambda: expect_rows(user_a.table('question_history').select('id, question').eq('id', a_row_id).execute()))
+    check("B cannot read A's row (even by exact id)", 'blocked',
+          lambda: user_b.table('question_history').select('*').eq('id', a_row_id).execute())
+    check("B listing all history sees none of A's rows", 'blocked',
+          lambda: user_b.table('question_history').select('*').execute())
+    check("B cannot delete A's row (0 rows affected)", 'blocked',
+          lambda: user_b.table('question_history').delete().eq('id', a_row_id).execute())
+    check("…and A's row still exists afterwards", 'allowed',
+          lambda: expect_rows(user_a.table('question_history').select('id').eq('id', a_row_id).execute()))
+    check("B cannot update A's row (no UPDATE grant/policy)", 'blocked',
+          lambda: user_b.table('question_history').update({'answer': 'hacked'}).eq('id', a_row_id).execute())
+    check('A cannot insert a row owned by B (user_id not insertable)', 'blocked',
+          lambda: user_a.table('question_history').insert(
+              {'question': 'x', 'answer': 'x', 'sources': [], 'user_id': user_b_id}).execute())
+    check('A cannot backdate created_at', 'blocked',
+          lambda: user_a.table('question_history').insert(
+              {'question': 'x', 'answer': 'x', 'sources': [], 'created_at': '2000-01-01T00:00:00Z'}).execute())
+    check('anonymous visitor cannot read any history', 'blocked',
+          lambda: anon.table('question_history').select('*').execute())
+    check('A can delete own row', 'allowed',
+          lambda: expect_rows(user_a.table('question_history').delete().eq('id', a_row_id).execute()))
+
+    # ---------- Server-only tables ----------
+    print('\n🗄️  Server-only tables (Edge Functions via service_role only)')
+    check('user cannot read question_embeddings_cache', 'blocked',
+          lambda: user_a.table('question_embeddings_cache').select('question_hash').limit(1).execute())
+    check('user cannot poison question_embeddings_cache', 'blocked',
+          lambda: user_a.table('question_embeddings_cache').insert(
+              {'question_hash': 'x', 'embedding': PROBE_VECTOR}, returning=ReturnMethod.minimal).execute() and 'inserted')
+    check('user cannot read api_usage (rate-limit log)', 'blocked',
+          lambda: user_a.table('api_usage').select('*').limit(1).execute())
+    check('user cannot delete api_usage rows to reset their limit', 'blocked',
+          lambda: user_a.table('api_usage').delete().neq('fn', '').execute())
+    check("user cannot call consume_rate_limit() (would burn others' quota)", 'blocked',
+          lambda: user_a.rpc('consume_rate_limit', {'p_user_id': user_b_id, 'p_fn': 'generate-answer',
+                                                    'p_limit': 30, 'p_window': '1 hour'}).execute())
+
     # ---------- Summary ----------
     passed = sum(results)
     print('\n' + '=' * 60)
