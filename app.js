@@ -229,14 +229,14 @@ async function checkSession() {
 if (loginBtn) {
     loginBtn.addEventListener('click', async () => {
         if (!supabaseClient) {
-            showMessage('Please configure Supabase first (see Setup Guide)', 'error');
+            showMessage('This site isn\'t connected to Supabase yet. See the setup notice above.', 'error');
             return;
         }
 
         const email = emailInput.value.trim();
 
         if (!email) {
-            showMessage('Please enter your email', 'error');
+            showMessage('Enter your email address.', 'error');
             return;
         }
 
@@ -254,7 +254,7 @@ if (loginBtn) {
         if (error) {
             showMessage(`Error: ${error.message}`, 'error');
         } else {
-            showMessage('Check your email for the magic link!', 'success');
+            showMessage(`Sign-in link sent to ${email}. Open it on this device to sign in.`, 'success');
         }
     });
 }
@@ -385,14 +385,10 @@ function setSearchReady(type, ready) {
     const btnEl = document.getElementById(`${type}-btn`);
     const panelEl = document.getElementById(`${type}-panel`);
 
+    // Shown as a dot on the mode tab; the text is for screen readers.
     if (statusEl) {
-        if (ready) {
-            statusEl.textContent = '🟢 Ready';
-            statusEl.className = 'status-badge ready';
-        } else {
-            statusEl.textContent = '🔴 Not Ready';
-            statusEl.className = 'status-badge not-ready';
-        }
+        statusEl.textContent = ready ? 'Ready' : 'Not available';
+        statusEl.className = `status-badge ${ready ? 'ready' : 'not-ready'}`;
     }
 
     if (inputEl) inputEl.disabled = !ready;
@@ -407,6 +403,38 @@ function setSearchReady(type, ready) {
             panelEl.classList.remove('panel-ready');
         }
     }
+}
+
+// ============================================
+// MODE TABS (Ask a question / Search by meaning / Search exact words)
+// ============================================
+
+const MODES = ['rag', 'semantic', 'keyword'];
+
+function selectMode(type, { focus = false } = {}) {
+    for (const mode of MODES) {
+        const tab = document.getElementById(`tab-${mode}`);
+        const panel = document.getElementById(`${mode}-panel`);
+        const selected = mode === type;
+        if (tab) {
+            tab.setAttribute('aria-selected', String(selected));
+            tab.tabIndex = selected ? 0 : -1;
+            if (selected && focus) tab.focus();
+        }
+        if (panel) panel.hidden = !selected;
+    }
+}
+
+for (const mode of MODES) {
+    const tab = document.getElementById(`tab-${mode}`);
+    if (!tab) continue;
+    tab.addEventListener('click', () => selectMode(mode));
+    tab.addEventListener('keydown', (e) => {
+        const step = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
+        if (!step) return;
+        e.preventDefault();
+        selectMode(MODES[(MODES.indexOf(mode) + step + MODES.length) % MODES.length], { focus: true });
+    });
 }
 
 // ============================================
@@ -431,7 +459,7 @@ async function keywordSearch() {
         if (error) throw new Error(`Search failed: ${error.message}`);
 
         if (!data || data.length === 0) {
-            showResults('keyword', '<div class="no-results">No results found. Try different keywords.</div>');
+            showResults('keyword', `<div class="no-results">No passage contains “${escapeHtml(query)}”. Try fewer words, or search by meaning instead.</div>`);
             return;
         }
 
@@ -454,7 +482,7 @@ async function keywordSearch() {
         for (const talk of Object.values(talks)) {
             html += `<div class="result-card">
                 <div class="result-title"><a href="${escapeHtml(talk.url)}" target="_blank" class="result-title-link">${escapeHtml(talk.title)}</a></div>
-                <div class="result-speaker">by ${escapeHtml(talk.speaker)}</div>
+                <div class="result-speaker">${escapeHtml(talk.speaker)}</div>
                 <div class="result-sentences">${talk.sentences.slice(0, 3).join('<br>')}</div>
             </div>`;
         }
@@ -492,7 +520,7 @@ async function semanticSearch() {
         const results = await searchSentences(embedding);
 
         if (!results || results.length === 0) {
-            showResults('semantic', '<div class="no-results">No similar content found. Try a different query.</div>');
+            showResults('semantic', '<div class="no-results">No passages matched. Try describing the idea in a full sentence.</div>');
             return;
         }
 
@@ -505,7 +533,7 @@ async function semanticSearch() {
                 <div class="result-card-header">
                     <div>
                         <div class="result-title"><a href="${escapeHtml(result.url)}" target="_blank" class="result-title-link">${escapeHtml(result.title)}</a></div>
-                        <div class="result-speaker">by ${escapeHtml(result.speaker)}</div>
+                        <div class="result-speaker">${escapeHtml(result.speaker)}</div>
                     </div>
                     ${badge}
                 </div>
@@ -574,28 +602,27 @@ function renderRagAnswer(answer, sources) {
 
     let html = `<div class="result-card rag-answer ${simClass}">
         <div class="result-card-header">
-            <div class="result-title">AI Answer</div>
+            <div class="result-title">Answer from ${sources.length} talk${sources.length === 1 ? '' : 's'}</div>
             ${overallSimilarity == null ? '' : similarityBadge(overallSimilarity)}
         </div>
         <div class="result-sentences">${escapeHtml(answer)}</div>
     </div>`;
 
-    // Show source talks with per-talk similarity badges and links
-    html += '<div class="result-sources"><strong>Sources:</strong></div>';
+    // Source talks, most relevant first, with per-talk similarity and links
+    html += '<div class="result-sources"><h3>Talks this answer draws from</h3><ol class="source-list">';
     for (const talk of sources) {
         const title = talk.url
             ? `<a href="${escapeHtml(talk.url)}" target="_blank" class="result-title-link">${escapeHtml(talk.title)}</a>`
             : escapeHtml(talk.title);
-        html += `<div class="result-card result-source">
-            <div class="result-card-header">
-                <div>
-                    <div class="result-title">${title}</div>
-                    <div class="result-speaker">by ${escapeHtml(talk.speaker)}</div>
-                </div>
+        html += `<li class="result-source">
+            <div class="source-line">
+                <span class="source-title">${title}</span>
                 ${typeof talk.similarity === 'number' ? similarityBadge(talk.similarity) : ''}
             </div>
-        </div>`;
+            <span class="source-speaker">${escapeHtml(talk.speaker)}</span>
+        </li>`;
     }
+    html += '</ol></div>';
     showResults('rag', html);
 }
 
@@ -746,12 +773,12 @@ async function loadHistory() {
         .limit(50);
 
     if (error) {
-        historyList.innerHTML = '<li class="history-empty">History unavailable.</li>';
+        historyList.innerHTML = '<li class="history-empty">Couldn\'t load your questions. Refresh the page to try again.</li>';
         return;
     }
     if (historyCount) historyCount.textContent = data.length ? `${data.length}` : '';
     if (!data.length) {
-        historyList.innerHTML = '<li class="history-empty">Questions you ask above will show up here.</li>';
+        historyList.innerHTML = '<li class="history-empty">Questions you ask will appear here, so you can reread the answers later.</li>';
         return;
     }
 
@@ -774,6 +801,7 @@ async function showHistoryItem(id) {
     if (error) return;
 
     if (ragInput) ragInput.value = data.question;
+    selectMode('rag');
     renderRagAnswer(data.answer, data.sources || []);
     document.getElementById('rag-panel')?.scrollIntoView({ behavior: 'smooth' });
 }
@@ -801,7 +829,7 @@ function showResults(type, html) {
 
 function clearResults(type) {
     const el = document.getElementById(`${type}-results`);
-    if (el) el.innerHTML = '<div class="searching">Searching...</div>';
+    if (el) el.innerHTML = '<div class="searching">Searching the talks…</div>';
 }
 
 function escapeHtml(text) {
@@ -821,7 +849,7 @@ function similarityBadge(similarity) {
     } else {
         cls = 'similarity-low';
     }
-    return `<span class="similarity-badge ${cls}">${pct}%</span>`;
+    return `<span class="similarity-badge ${cls}">${pct}% match</span>`;
 }
 
 // ============================================

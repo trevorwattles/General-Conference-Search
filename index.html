@@ -4,32 +4,36 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Supabase RAG - Conference Q&A</title>
+    <title>Conference Search</title>
+    <meta name="description" content="Ask questions and search 426 General Conference talks from April 2020 to October 2025.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400..600&family=Literata:ital,opsz,wght@0,7..72,400..650;1,7..72,400&display=swap">
     <link rel="stylesheet" href="styles.css">
 </head>
 
 <body>
-    <div id="deploy-info" class="deploy-info">
-        Updated: <span id="deploy-date">...</span>
-        &nbsp;·&nbsp; Views: <span id="page-views-count">...</span>
+    <!-- Loading bar (shown while a search or sign-in request is running) -->
+    <div id="loading" class="loading hidden" role="status" aria-label="Loading">
+        <div class="spinner"></div>
     </div>
 
-    <!-- Setup Banner (shows when configuration is incomplete) -->
+    <!-- Setup notice (shows when configuration is incomplete) -->
     <div id="setup-banner" class="setup-banner hidden">
         <div class="setup-banner-content">
             <div class="setup-banner-header">
-                <span class="setup-icon">⚙️</span>
-                <h3>Setup Required</h3>
-                <button id="close-setup-banner" class="close-btn" title="Dismiss">×</button>
+                <h3>Finish setting up this site</h3>
+                <button id="close-setup-banner" class="close-btn" title="Dismiss" aria-label="Dismiss">×</button>
             </div>
 
             <div class="setup-url-section">
-                <label>Your GitHub Pages URL:</label>
+                <span class="setup-label">This site's address</span>
                 <div class="url-copy-container">
                     <code id="github-pages-url">Calculating...</code>
-                    <button id="copy-url-btn" class="copy-btn" title="Copy URL">📋</button>
+                    <button id="copy-url-btn" class="copy-btn" title="Copy address" aria-label="Copy address">📋</button>
                 </div>
-                <small>Add this URL to Supabase → Authentication → URL Configuration</small>
+                <small>Add it in Supabase under Authentication, then URL Configuration.</small>
             </div>
 
             <div class="setup-checklist">
@@ -48,109 +52,138 @@
             </div>
 
             <div class="setup-links">
-                <a href="#" id="supabase-config-link" target="_blank" class="setup-link">🔗 Configure Supabase Redirect
-                    URLs</a>
-                <a href="#" id="setup-guide-link" target="_blank" class="setup-link">📖 View Full Setup Guide</a>
+                <a href="#" id="supabase-config-link" target="_blank" class="setup-link">Open Supabase redirect settings</a>
+                <a href="#" id="setup-guide-link" target="_blank" class="setup-link">Read the setup guide</a>
             </div>
         </div>
     </div>
 
-    <!-- Login Screen -->
+    <!-- Sign-in Screen -->
     <div id="login-screen" class="screen">
-        <div class="container">
-            <div class="card">
-                <h1>Conference Q&A</h1>
-                <p class="subtitle">Ask questions about conference talks using AI</p>
+        <header class="site-header">
+            <span class="wordmark">Conference Search</span>
+        </header>
 
-                <div id="login-form">
-                    <input type="email" id="email-input" placeholder="Enter your email" />
-                    <button id="login-btn" class="btn-primary">Sign In with Magic Link</button>
-                    <p class="info-text">We'll send you a magic link to sign in</p>
+        <main class="login">
+            <section class="login-intro">
+                <h1 class="display">Search six years of General Conference</h1>
+                <p class="lede">Ask a question and get an answer drawn from the talks themselves, with links to
+                    every talk it used. 426 talks, April 2020 to October 2025.</p>
+
+                <div id="login-form" class="login-form">
+                    <label for="email-input">Email address</label>
+                    <div class="field-row">
+                        <input type="email" id="email-input" placeholder="you@example.com" autocomplete="email" />
+                        <button id="login-btn" class="btn-primary">Email me a sign-in link</button>
+                    </div>
+                    <p class="info-text">No password. Open the link we send on this device to sign in.</p>
                 </div>
 
-                <div id="login-message" class="message hidden"></div>
-            </div>
-        </div>
+                <div id="login-message" class="message hidden" role="status"></div>
+            </section>
+
+            <figure class="login-sample" aria-label="Example of a matched passage">
+                <blockquote>
+                    <p>There is <mark>peace and joy even in hard times</mark>.</p>
+                </blockquote>
+                <figcaption>
+                    <cite>Prayers of Faith</cite>
+                    President Henry B. Eyring, April 2020
+                </figcaption>
+                <p class="sample-note">Found by asking “How can I find peace during hard times?”, a question whose
+                    exact words appear in no talk.</p>
+            </figure>
+        </main>
     </div>
 
     <!-- Main App Screen -->
     <div id="app-screen" class="screen hidden">
-        <nav class="navbar">
-            <h2>Conference Q&A</h2>
+        <header class="site-header">
+            <span class="wordmark">Conference Search</span>
             <div class="user-info">
                 <span id="user-email"></span>
-                <button id="logout-btn" class="btn-secondary">Logout</button>
+                <button id="logout-btn" class="btn-quiet">Sign out</button>
             </div>
-        </nav>
+        </header>
 
-        <div class="container">
-            <div class="search-panels">
-                <!-- Panel 1: Keyword Search -->
-                <div class="search-panel" id="keyword-panel">
-                    <div class="panel-header">
-                        <h3>🔍 Keyword Search</h3>
-                        <span class="status-badge not-ready" id="keyword-status">🔴 Not Ready</span>
-                    </div>
-                    <p class="panel-description">Search conference talks by keyword. Works once you import the
-                        conference data.</p>
-                    <div class="panel-input">
-                        <input type="text" id="keyword-input" placeholder="Search by keyword..." autocomplete="off"
-                            disabled />
-                        <button id="keyword-btn" class="btn-primary" disabled>Search</button>
-                    </div>
-                    <div class="search-results" id="keyword-results"></div>
+        <div class="workspace">
+            <main class="study">
+                <h1 class="display">What would you like to study?</h1>
+
+                <div class="mode-switch" role="tablist" aria-label="Search mode">
+                    <button class="mode-tab" role="tab" id="tab-rag" aria-controls="rag-panel" aria-selected="true">
+                        <span class="status-badge not-ready" id="rag-status">Not Ready</span>
+                        Ask a question
+                    </button>
+                    <button class="mode-tab" role="tab" id="tab-semantic" aria-controls="semantic-panel"
+                        aria-selected="false" tabindex="-1">
+                        <span class="status-badge not-ready" id="semantic-status">Not Ready</span>
+                        Search by meaning
+                    </button>
+                    <button class="mode-tab" role="tab" id="tab-keyword" aria-controls="keyword-panel"
+                        aria-selected="false" tabindex="-1">
+                        <span class="status-badge not-ready" id="keyword-status">Not Ready</span>
+                        Search exact words
+                    </button>
                 </div>
 
-                <!-- Panel 2: Semantic Search -->
-                <div class="search-panel" id="semantic-panel">
-                    <div class="panel-header">
-                        <h3>🧠 Semantic Search</h3>
-                        <span class="status-badge not-ready" id="semantic-status">🔴 Not Ready</span>
-                    </div>
-                    <p class="panel-description">Find similar content by meaning, not just keywords. Requires embeddings
-                        and the embed-question Edge Function.</p>
+                <!-- Ask a question (RAG) -->
+                <section class="search-panel" id="rag-panel" role="tabpanel" aria-labelledby="tab-rag">
                     <div class="panel-input">
-                        <input type="text" id="semantic-input" placeholder="Search by meaning..." autocomplete="off"
-                            disabled />
-                        <button id="semantic-btn" class="btn-primary" disabled>Search</button>
-                    </div>
-                    <div class="search-results" id="semantic-results"></div>
-                </div>
-
-                <!-- Panel 3: RAG (Ask a Question) -->
-                <div class="search-panel" id="rag-panel">
-                    <div class="panel-header">
-                        <h3>🤖 Ask a Question (RAG)</h3>
-                        <span class="status-badge not-ready" id="rag-status">🔴 Not Ready</span>
-                    </div>
-                    <p class="panel-description">Get AI-generated answers based on conference talks. Requires all Edge
-                        Functions deployed.</p>
-                    <div class="panel-input">
-                        <input type="text" id="rag-input" placeholder="Ask a question about conference talks..."
-                            autocomplete="off" disabled />
+                        <input type="text" id="rag-input" class="question-field"
+                            placeholder="What have church leaders taught about prayer?" autocomplete="off"
+                            aria-label="Your question" disabled />
                         <button id="rag-btn" class="btn-primary" disabled>Ask</button>
                     </div>
-                    <div class="search-results" id="rag-results"></div>
-                </div>
+                    <p class="panel-description">Reads the three talks that best match your question and writes an
+                        answer from them, with links to each talk.</p>
+                    <div class="search-results" id="rag-results" aria-live="polite"></div>
+                </section>
 
-                <!-- Panel 4: My Question History (per-user RLS) -->
-                <div class="search-panel" id="history-panel">
-                    <div class="panel-header">
-                        <h3>📜 My Question History</h3>
-                        <span class="status-badge" id="history-count"></span>
+                <!-- Search by meaning (semantic) -->
+                <section class="search-panel" id="semantic-panel" role="tabpanel" aria-labelledby="tab-semantic"
+                    hidden>
+                    <div class="panel-input">
+                        <input type="text" id="semantic-input" class="question-field"
+                            placeholder="Finding peace during hard times" autocomplete="off"
+                            aria-label="Search by meaning" disabled />
+                        <button id="semantic-btn" class="btn-primary" disabled>Search</button>
                     </div>
-                    <p class="panel-description">Your past questions, visible only to you (enforced by Row Level
-                        Security). Click one to see its answer again.</p>
-                    <ul class="history-list" id="history-list"></ul>
+                    <p class="panel-description">Finds passages about the same idea, even when they use different
+                        words.</p>
+                    <div class="search-results" id="semantic-results" aria-live="polite"></div>
+                </section>
+
+                <!-- Search exact words (keyword) -->
+                <section class="search-panel" id="keyword-panel" role="tabpanel" aria-labelledby="tab-keyword"
+                    hidden>
+                    <div class="panel-input">
+                        <input type="text" id="keyword-input" class="question-field" placeholder="Kirtland Temple"
+                            autocomplete="off" aria-label="Search exact words" disabled />
+                        <button id="keyword-btn" class="btn-primary" disabled>Search</button>
+                    </div>
+                    <p class="panel-description">Finds passages that contain exactly what you type.</p>
+                    <div class="search-results" id="keyword-results" aria-live="polite"></div>
+                </section>
+            </main>
+
+            <!-- Your questions (history, per-user RLS) -->
+            <aside class="history" id="history-panel" aria-labelledby="history-heading">
+                <div class="history-header">
+                    <h2 id="history-heading">Your questions</h2>
+                    <span class="history-count" id="history-count"></span>
                 </div>
-            </div>
+                <p class="history-note">Only you can see these.</p>
+                <ul class="history-list" id="history-list"></ul>
+            </aside>
         </div>
     </div>
 
-    <!-- Loading Spinner -->
-    <div id="loading" class="loading hidden">
-        <div class="spinner"></div>
-    </div>
+    <footer class="site-footer">
+        <p id="deploy-info" class="deploy-info">
+            Last updated <span id="deploy-date">...</span>. Page views: <span id="page-views-count">...</span>.
+        </p>
+    </footer>
 
     <!-- Supabase JS Client -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>

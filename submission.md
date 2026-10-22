@@ -34,7 +34,7 @@ The professor asked for correct access control using RLS and a design that can s
 
 ## My custom feature: Question History + embedding cache + rate limit
 
-**What it does.** A **📜 My Question History** panel lists every question you've asked. Click one and its answer and sources come back instantly, with no new OpenAI call. Each entry has a delete button. Behind it:
+**What it does.** A **Your questions** panel, in the margin beside the search, lists every question you've asked. Click one and its answer and sources come back instantly, with no new OpenAI call. Each entry has a delete button. Behind it:
 
 1. **`question_history` with real per-user RLS.** SELECT/INSERT/DELETE policies are all `user_id = (select auth.uid())`, and there's no UPDATE. The frontend never filters by user; the database does. Column-level INSERT grants mean a user can't set `user_id` (to write into someone else's history) or `created_at` (to backdate). `generate-answer` writes the row **using the caller's own JWT**, so RLS still applies even inside my server code.
 2. **Embedding cache.** `embed-question` hashes the normalized question (sha256) and reuses stored embeddings, so repeated questions cost $0. The cache table has RLS on with no policies or grants: only the Edge Function (service role) can touch it, and it stores no user IDs.
