@@ -1,151 +1,75 @@
-# Conference RAG
+# Conference Search
 
-A Retrieval Augmented Generation (RAG) application that lets users ask questions about General Conference talks using semantic search and AI-generated answers.
+Ask a question and get an answer drawn from General Conference talks, with links to every talk it used. Covers 426 talks from April 2020 to October 2025.
 
-<p align="center">
-  <img src="example.png" alt="Conference RAG screenshot" width="600">
-  <br>
-  <em>Sample screenshot — semantic search with AI-generated answers</em>
-</p>
+**Live site:** https://trevorwattles.github.io/conference-rag/ (sign in with an emailed link)
 
-## 🚀 Quick Start
+![Conference Search answering "What have church leaders taught about prayer?"](docs/rag-screenshot.png)
 
-Follow the step-by-step guides in the `steps/` folder:
+## What it does
 
-```
-🏁 LAUNCH ──→ 🔐 SIGN IN ──→ 🔍 KEYWORD ──→ 🧠 SEMANTIC ──→ 🤖 RAG ──→ 🚀 YOURS
-```
+- **Ask a question.** Retrieves the three most relevant talks and has GPT-4o write an answer from them only, citing each talk. If the talks don't cover it, the answer says so.
+- **Search by meaning.** Finds passages about the same idea even when the words differ. "How can I find peace during hard times?" finds *"There is peace and joy even in hard times."*
+- **Search exact words.** Classic keyword search, with matches highlighted.
+- **Your questions.** Every answer is saved to your private history, so you can reread it later without another AI call.
 
-| Step | Milestone | Topic | Time |
-|------|-----------|-------|------|
-| [00](steps/00_overview.md) | — | Overview & Environment Setup | 15 min |
-| [01](steps/01_fork_and_deploy.md) | 🏁 Launch | Fork & Deploy to GitHub Pages | 15 min |
-| [02](steps/02_supabase_and_login.md) | 🔐 Sign In | Supabase Project & Login | 15 min |
-| [03](steps/03_database_schema.md) | 🔍 Keyword (1/2) | Database Schema & RLS | 10 min |
-| [04](steps/04_scrape_and_import.md) | 🔍 Keyword (2/2) | Scrape & Import → First green light! | 20 min |
-| [05](steps/05_embeddings.md) | 🧠 Semantic | Embeddings & Edge Function | 25 min |
-| [06](steps/06_rag.md) | 🤖 RAG | RAG Edge Function → All green! | 15 min |
-| [07](steps/07_make_it_yours.md) | 🚀 Yours | Add Feature & Reflection | 20 min |
-
-**Prerequisites:**
-- [Supabase](https://supabase.com) account (free tier)
-- [GitHub](https://github.com) account
-- [OpenAI API key](https://platform.openai.com/api-keys) (~$0.60 usage)
-- Python 3.9+
-- An AI coding assistant (Antigravity, GitHub Copilot, or Cursor)
-
-## 🤖 AI-Assisted Development
-
-This assignment is designed to be completed with an AI coding assistant. See [Step 00](steps/00_overview.md) for setup instructions.
-
-Your AI assistant will automatically read [`ai_agent_instructions.md`](ai_agent_instructions.md) to understand the assignment's learning objectives and teach you along the way.
-
-## 🏗️ Architecture
+## How it works
 
 ```
-┌─────────────┐
-│   Browser   │  Student asks question
-│  (GitHub    │
-│   Pages)    │
-└──────┬──────┘
-       │
-       ├─── Supabase Auth (magic link)
-       │
-       ├─── Edge Function: embed-question
-       │         ↓ OpenAI API (server-side 🔒)
-       │         ↓ Returns embedding vector
-       │
-       ├─── Supabase Database (pgvector)
-       │         ↓ match_sentences()
-       │         ↓ Returns similar sentences
-       │
-       └─── Edge Function: generate-answer
-                ↓ GPT-4o (server-side 🔒)
-                ↓ Returns final answer
+Browser (static site on GitHub Pages)
+ ├─ Supabase Auth ──────── magic-link sign-in → JWT
+ ├─ Postgres via PostgREST ─ keyword search (trigram index), vector search (pgvector HNSW),
+ │                           question history; every query filtered by grants + row-level security
+ └─ Edge Functions (Deno) ── embed-question → OpenAI text-embedding-3-small (with cache)
+                             generate-answer → GPT-4o, grounded in the retrieved talks
 ```
 
-## 🔍 Three Search Modes
+The data pipeline (`scripts/`) scrapes the talks, splits them into 26,256 sentence chunks, embeds each one as a 1,536-dimension vector (about 2 cents in total), and loads them into Postgres.
 
-| Mode | What it does | Requires |
-|------|-------------|----------|
-| **🔍 Keyword Search** | SQL `ILIKE` query on talk text | Conference data imported |
-| **🧠 Semantic Search** | Vector similarity with pgvector | Embeddings + `embed-question` Edge Function |
-| **🤖 Ask a Question (RAG)** | AI-generated answers with sources | All Edge Functions deployed |
+## Security
 
-## 📁 Project Structure
+- **The public key can't read the data.** The Supabase anon key ships with the site, so the database itself enforces access. Default grants are revoked, talks are readable only by signed-in users, and nothing is writable from the browser.
+- **Per-user privacy.** Question history uses row-level security (`user_id = auth.uid()`), so nobody can read, change, or delete anyone else's questions, and ownership and timestamps can't be forged.
+- **Secrets stay server-side.** The OpenAI key lives only in Edge Functions, which verify the caller's JWT, validate input, and enforce a per-user rate limit before spending anything.
+- **Proven by tests.** `scripts/test_rls.py` (29 checks) and `scripts/test_functions.py` (19 checks) exercise every rule with the public key, as an anonymous visitor and as two separate users.
 
-```
-conference-rag/
-├── index.html                  # Main application UI
-├── app.js                      # Three search modes + auth logic
-├── styles.css                  # Dark theme styling
-├── config.js                   # Loads config.public.json for browser
-├── config.public.json          # Supabase URL + anon key (safe to commit)
-├── config.secret.json          # API keys & secrets (git-ignored, YOU create this)
-├── config.secret.example.json  # Template for config.secret.json
-├── requirements.txt            # Python dependencies
-├── .nojekyll                   # Tells GitHub Pages not to use Jekyll
-├── steps/                      # Step-by-step assignment guides
-│   ├── 00_overview.md
-│   ├── ...
-│   └── 07_make_it_yours.md
-├── scripts/                    # Pipeline scripts (run in order)
-│   ├── 01_create_schema.py     # Create DB schema
-│   ├── 02_scrape_data.py       # Scrape conference talks → scripts/output/talks.json
-│   ├── 03_import_data.py       # Import text to Supabase (🔍 keyword!)
-│   ├── 04_embed_data.py        # Generate embeddings → scripts/output/ (💰 saved to disk!)
-│   ├── 05_update_embeddings.py # Update DB with embeddings (🧠 semantic!)
-│   └── output/                 # Intermediate data files (git-ignored)
-└── supabase/                   # Edge Functions (YOU create this with supabase init)
-    └── functions/
-        ├── _shared/            # Shared auth & CORS helpers
-        ├── embed-question/     # Converts questions to embeddings
-        └── generate-answer/    # Generates AI answers
-```
+## Performance
 
-## 🔒 Security Model
+Measured with `EXPLAIN ANALYZE` (`scripts/explain_search.py`):
 
-| Component | Security Approach |
-|-----------|------------------|
-| Supabase anon key | Safe to expose in `config.public.json` (protected by RLS) |
-| OpenAI API key | Server-side only via Edge Functions (in `config.secret.json`) |
-| Database access | Row Level Security policies |
-| Transport | HTTPS enforced by GitHub Pages |
+| Query | Without index | With index |
+|---|---|---|
+| Keyword search, worst case | 91 ms (scans all 26k rows) | 0.3 ms (trigram GIN) |
+| Semantic search, top 20 | 17–23 s (would exceed the 8 s timeout) | 3–8 ms (HNSW), 90–100% recall |
 
-## 📚 Learning Objectives
+Cost controls (embedding cache, per-user limits, input caps) and what would change at millions of users are in [ARCHITECTURE.md](ARCHITECTURE.md).
 
-1. **Vector Embeddings** — Representing text as searchable numbers
-2. **Semantic Search** — Finding similar content with cosine similarity
-3. **RAG Architecture** — Combining retrieval + generation
-4. **Edge Functions** — Serverless compute for secure API management
-5. **Row Level Security** — User-level data access control
-6. **Production Deployment** — Full-stack app on GitHub Pages
+## Stack
 
-## 🎓 Assignment Deliverables
+Vanilla HTML/CSS/JS · Supabase (Postgres, pgvector, Auth, Edge Functions) · OpenAI `text-embedding-3-small` and GPT-4o · Python data pipeline · GitHub Pages
 
-1. GitHub repository URL (your fork)
-2. Live deployment URL (GitHub Pages)
-3. Screenshot of a working query + answer
-4. Your custom feature description
-5. Written reflection on security, search, and AI-assisted development
+## Repository layout
 
-## 🆘 Troubleshooting
+| Path | Contents |
+|---|---|
+| `index.html`, `app.js`, `styles.css` | The site |
+| `supabase/migrations/` | Schema hardening, indexes, history, cache, and rate limit (SQL) |
+| `supabase/functions/` | `embed-question`, `generate-answer`, shared auth/CORS/DB helpers |
+| `scripts/` | Data pipeline (`01`–`05`), tests, query-plan and SQL helpers |
+| `steps/` | The original step-by-step course guide |
+| `ARCHITECTURE.md` | Design, security layers, and scaling notes |
 
-| Issue | Solution |
-|-------|----------|
-| "Please configure Supabase" | Update `config.public.json` with your project URL and anon key |
-| Magic link not working | Add your site URL to Supabase → Authentication → URL Configuration |
-| Magic link email not arriving | Free tier allows only **3 per hour** — wait and try again, check spam |
-| Changes don't appear | Hard refresh (Ctrl+Shift+R) or try incognito window |
-| Search shows "Not Ready" | Complete the corresponding step first |
-| "Failed to get embedding" | Deploy Edge Functions and set OPENAI_API_KEY secret |
-| "Database search failed" | Run `scripts/01_create_schema.py` |
-| No search results | Import data with `scripts/03_import_data.py` |
+## Run your own copy
 
-## 📄 License
+1. Fork this repo and enable GitHub Pages (main branch, root).
+2. Create a Supabase project and an OpenAI API key. Put the URL and anon key in `config.public.json`, and the rest in `config.secret.json` (git-ignored; template in `config.secret.example.json`).
+3. Set up Python: `python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt`
+4. Build the database: run `scripts/01_create_schema.py` to `05_update_embeddings.py` in order, then apply `supabase/migrations/0002`–`0006` with `python scripts/run_sql.py <file>`.
+5. Deploy the functions: `supabase functions deploy embed-question --no-verify-jwt` (same for `generate-answer`), after `supabase secrets set OPENAI_API_KEY=...`.
+6. Add your Pages URL to Supabase Auth redirect URLs and to `supabase/functions/_shared/cors.ts`.
 
-Educational use only. Conference talk content is used under fair use for educational purposes.
+The [step-by-step guides](steps/README.md) walk through each stage in detail.
 
----
+## Credits
 
-Built with ❤️ for CS 452
+Built by Trevor Wattles for CS 452 at BYU, starting from the course's [conference-rag template](https://github.com/byu-cs-452/conference-rag), with [Claude Code](https://claude.com/claude-code) as a coding partner. Not affiliated with The Church of Jesus Christ of Latter-day Saints; talk text belongs to its publisher and links back to the original talks.
